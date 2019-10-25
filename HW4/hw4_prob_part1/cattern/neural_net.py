@@ -77,14 +77,16 @@ class TwoLayerNet(object):
     # shape (N, C). Note that this does not include the softmax                 #
     # HINT: This is just a series of matrix multiplication.                     #
     #############################################################################
-    
+    fc1 = X.dot(W1) + b1     
+    X2 = np.maximum(0, fc1)  
+    scores = X2.dot(W2) + b2 
     #############################################################################
     #                              END OF TODO#1                                #
     #############################################################################
     
     # If the targets are not given then jump out, we're done
     if y is None:
-      return scores
+        return scores
 
     # Compute the loss
     loss = None
@@ -94,7 +96,17 @@ class TwoLayerNet(object):
     # in the variable loss, which should be a scalar. Use the Softmax           #
     # classifier loss.                                                          #
     #############################################################################
-    
+    scores -= np.max(scores, axis=1, keepdims=True) # avoid numeric instability
+
+    scores_exp = np.exp(scores)
+
+    softmax_matrix = scores_exp / np.sum(scores_exp, axis=1, keepdims=True) 
+
+    loss = np.sum(-np.log(softmax_matrix[np.arange(N), y]))
+
+    loss /= N
+
+    loss += 0.5*(reg * (np.sum(W2 * W2) + np.sum( W1 * W1 ))) # regularization
     #############################################################################
     #                              END OF TODO#2                                #
     #############################################################################
@@ -108,6 +120,22 @@ class TwoLayerNet(object):
     # don't forget about the regularization term                                #
     #############################################################################
 
+    softmax_matrix[np.arange(N), y] -= 1
+    softmax_matrix /= N
+    # W2 gradient
+    dW2 = X2.T.dot(softmax_matrix)   # [HxN] * [NxC] = [HxC]
+    # b2 gradient
+    db2 = softmax_matrix.sum(axis=0)
+    # W1 gradient
+    dW1 = softmax_matrix.dot(W2.T)   # [NxC] * [CxH] = [NxH]
+    dfc1 = dW1 * (fc1>0)             # [NxH] . [NxH] = [NxH]
+    dW1 = X.T.dot(dfc1)              # [DxN] * [NxH] = [DxH]
+    # b1 gradient
+    db1 = dfc1.sum(axis=0)
+    # regularization gradient
+    dW1 += reg * 2 * W1
+    dW2 += reg * 2 * W2
+    grads = {'W1':dW1, 'b1':db1, 'W2':dW2, 'b2':db2}
     #############################################################################
     #                              END OF TODO#3                                #
     #############################################################################
@@ -152,7 +180,11 @@ class TwoLayerNet(object):
       # them in X_batch and y_batch respectively.                             #
       # You might find np.random.choice() helpful.                            #
       #########################################################################
+      batch_indices = np.random.choice(num_train, batch_size)
 
+      X_batch = X[batch_indices]
+
+      y_batch = y[batch_indices]
       #########################################################################
       #                             END OF YOUR TODO#4                        #
       #########################################################################
@@ -167,7 +199,8 @@ class TwoLayerNet(object):
       # using stochastic gradient descent. You'll need to use the gradients   #
       # stored in the grads dictionary defined above.                         #
       #########################################################################
-
+      for key in self.params:
+        self.params[key] -= learning_rate * grads[key]
       #########################################################################
       #                             END OF YOUR TODO#5                        #
       #########################################################################
@@ -187,7 +220,7 @@ class TwoLayerNet(object):
         #######################################################################
         # TODO#6: Decay learning rate (exponentially) after each epoch        #
         #######################################################################
-
+        learning_rate *= learning_rate_decay
         #######################################################################
         #                             END OF YOUR TODO#6                      #
         #######################################################################
@@ -219,7 +252,7 @@ class TwoLayerNet(object):
     ###########################################################################
     # TODO#7: Implement this function; it should be VERY simple!              #
     ###########################################################################
-
+    y_pred = np.argmax( self.loss(X), axis=1)
     ###########################################################################
     #                              END OF YOUR TODO#7                         #
     ###########################################################################
